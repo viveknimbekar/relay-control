@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relay Control</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f4; }
+        .container { width: 90%; margin: auto; }
+        .relay-card { background: white; padding: 10px; margin: 10px; border-radius: 5px; display: inline-block; width: 200px; }
+        .status { font-weight: bold; color: green; }
+        .btn { padding: 8px; margin: 5px; cursor: pointer; border: none; }
+        .on { background: green; color: white; }
+        .off { background: red; color: white; }
+        .edit-btn { background: orange; color: white; }
+        .voice-btn { background: blue; color: white; }
+        .footer { color: red; font-size: 12px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h2>Nimbekar Mobile and Electronics</h2>
+    
+    <div class="container" id="relayContainer"></div>
+
+    <button class="btn" onclick="allOn()">All ON</button>
+    <button class="btn off" onclick="allOff()">All OFF</button>
+    <button class="btn" onclick="addRelay()">+ Add Relay</button>
+    <button class="btn voice-btn" onclick="startVoiceCommand()">🎤 Voice Control</button>
+
+    <div class="footer">Nimbekar Mobile And Electronics</div>
+
+    <script>
+        let relays = JSON.parse(localStorage.getItem('relays')) || [
+            { id: 1, name: 'Relay 1', onUrl: '/relay1/on', offUrl: '/relay1/off', status: false },
+            { id: 2, name: 'Relay 2', onUrl: '/relay2/on', offUrl: '/relay2/off', status: false }
+        ];
+
+        function renderRelays() {
+            const container = document.getElementById('relayContainer');
+            container.innerHTML = '';
+            relays.forEach(relay => {
+                const div = document.createElement('div');
+                div.className = 'relay-card';
+                div.innerHTML = `
+                    <h3>${relay.name}</h3>
+                    <p class="status" id="status-${relay.id}">${relay.status ? 'ON' : 'OFF'}</p>
+                    <button class="btn on" onclick="toggleRelay(${relay.id}, true)">ON</button>
+                    <button class="btn off" onclick="toggleRelay(${relay.id}, false)">OFF</button>
+                    <button class="btn edit-btn" onclick="editRelay(${relay.id})">Edit</button>
+                `;
+                container.appendChild(div);
+            });
+            localStorage.setItem('relays', JSON.stringify(relays));
+        }
+
+        function toggleRelay(id, state) {
+            let relay = relays.find(r => r.id === id);
+            fetch(state ? relay.onUrl : relay.offUrl)
+                .then(() => {
+                    relay.status = state;
+                    document.getElementById(`status-${id}`).innerText = state ? 'ON' : 'OFF';
+                    speakText(`${relay.name} is now ${state ? 'ON' : 'OFF'}`);
+                });
+        }
+
+        function allOn() { relays.forEach(r => toggleRelay(r.id, true)); }
+        function allOff() { relays.forEach(r => toggleRelay(r.id, false)); }
+
+        function editRelay(id) {
+            let relay = relays.find(r => r.id === id);
+            let name = prompt('Enter Relay Name:', relay.name);
+            let onUrl = prompt('Enter ON URL:', relay.onUrl);
+            let offUrl = prompt('Enter OFF URL:', relay.offUrl);
+
+            if (name && onUrl && offUrl) {
+                relay.name = name;
+                relay.onUrl = onUrl;
+                relay.offUrl = offUrl;
+                renderRelays();
+            }
+        }
+
+        function addRelay() {
+            let name = prompt('Enter Relay Name:');
+            let onUrl = prompt('Enter ON URL:');
+            let offUrl = prompt('Enter OFF URL:');
+
+            if (name && onUrl && offUrl) {
+                relays.push({ id: Date.now(), name, onUrl, offUrl, status: false });
+                renderRelays();
+            }
+        }
+
+        function fetchStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    relays.forEach((r, i) => r.status = data[`relay${i+1}`]);
+                    renderRelays();
+                });
+        }
+
+        setInterval(fetchStatus, 5000);
+        renderRelays();
+
+        // 🎤 Voice Command Feature
+        function startVoiceCommand() {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'hi-IN'; // हिंदी, मराठी और इंग्लिश सपोर्ट करेगा
+            recognition.start();
+
+            recognition.onresult = function(event) {
+                const command = event.results[0][0].transcript.toLowerCase();
+                console.log("Voice Command: ", command);
+                processVoiceCommand(command);
+            };
+        }
+
+        function processVoiceCommand(command) {
+            relays.forEach(relay => {
+                if (command.includes(relay.name.toLowerCase())) {
+                    if (command.includes("on") || command.includes("चालू") || command.includes("start")) {
+                        toggleRelay(relay.id, true);
+                    } else if (command.includes("off") || command.includes("बंद") || command.includes("stop")) {
+                        toggleRelay(relay.id, false);
+                    }
+                }
+            });
+        }
+
+        // 🔊 Audio Response Feature
+        function speakText(text) {
+            const speech = new SpeechSynthesisUtterance();
+            speech.lang = 'hi-IN'; // हिंदी, मराठी, इंग्लिश सपोर्ट
+            speech.text = text;
+            window.speechSynthesis.speak(speech);
+        }
+    </script>
+
+</body>
+</html>
